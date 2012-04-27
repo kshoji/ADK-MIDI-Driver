@@ -19,12 +19,15 @@ Requirement
 
 Device Connection
 ----
-    Android [USB B port]------[USB B port] ADK + MIDI Shield [MIDI IN/OUT port] ------ MIDI device
+    Android [USB B port]------[USB A port] ADK + MIDI Shield [MIDI IN/OUT port] ------ MIDI device
 
 Projects
 ----
 - Library Project  
  - ADKMIDIDriver : The driver for connecting a MIDI device with ADK.
+
+- Accessory firmware
+ - MIDIAccessoryFirmware : The firmware for ADK board.
 
 - Sample Project
  - ADKMIDIDriverSample : The sample implementation of the synthesizer / MIDI event logger.
@@ -37,11 +40,18 @@ Project setup
 - Import the library project into Eclipse workspace, and build it.
 - Create new Android Project. And add the library project to the project.
 - Override `jp.kshoji.driver.adkmidi.activity.AbstractMidiActivity`.
+- Modify the AndroidManifest.xml file's application tag.
+ - Add **uses-library** com.android.future.usb.accessory 
 - Modify the AndroidManifest.xml file's activity tag.
  - Add **intent-filter** android.hardware.usb.action.USB_ACCESSORY_ATTACHED and **meta-data** to the overridden Activity.
  - Activity's **launchMode** must be "singleTask".
 - 
 
+    <application
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name" >
+        <uses-library android:name="com.android.future.usb.accessory" />
+    
         <activity
             android:name=".MyMidiMainActivity"
             android:label="@string/app_name"
@@ -57,6 +67,7 @@ Project setup
                 android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
+    </application>
 
 
 MIDI event receiving
