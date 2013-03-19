@@ -8,13 +8,15 @@ package jp.kshoji.driver.adkmidi.listener;
 public interface OnMidiEventListener {
 	
 	/**
-	 * Code Index Number : 0x4, 0x5, 0x6, 0x7
+	 * SysEx
+	 * 
 	 * @param systemExclusive
 	 */
 	void onMidiSystemExclusive(byte[] systemExclusive);
 	
 	/**
-	 * Code Index Number : 0x8
+	 * Note-off
+	 * 
 	 * @param channel
 	 * @param note
 	 * @param velocity
@@ -22,7 +24,8 @@ public interface OnMidiEventListener {
 	void onMidiNoteOff(int channel, int note, int velocity);
 	
 	/**
-	 * Code Index Number : 0x9
+	 * Note-on
+	 * 
 	 * @param channel
 	 * @param note
 	 * @param velocity
@@ -30,7 +33,8 @@ public interface OnMidiEventListener {
 	void onMidiNoteOn(int channel, int note, int velocity);
 	
 	/**
-	 * Code Index Number : 0xa
+	 * Poly-KeyPress
+	 * 
 	 * @param channel
 	 * @param note
 	 * @param pressure
@@ -38,7 +42,8 @@ public interface OnMidiEventListener {
 	void onMidiPolyphonicAftertouch(int channel, int note, int pressure);
 	
 	/**
-	 * Code Index Number : 0xb
+	 * Control Change
+	 * 
 	 * @param channel
 	 * @param function
 	 * @param value
@@ -46,21 +51,24 @@ public interface OnMidiEventListener {
 	void onMidiControlChange(int channel, int function, int value);
 	
 	/**
-	 * Code Index Number : 0xc
+	 * Program Change
+	 * 
 	 * @param channel
 	 * @param program
 	 */
 	void onMidiProgramChange(int channel, int program);
 	
 	/**
-	 * Code Index Number : 0xd
+	 * Channel Pressure
+	 * 
 	 * @param channel
 	 * @param pressure
 	 */
 	void onMidiChannelAftertouch(int channel, int pressure);
 	
 	/**
-	 * Code Index Number : 0xe
+	 * PitchBend Change
+	 * 
 	 * @param channel
 	 * @param lsb
 	 * @param msb

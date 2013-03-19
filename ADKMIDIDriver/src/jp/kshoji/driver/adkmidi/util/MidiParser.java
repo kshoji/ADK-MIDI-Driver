@@ -2,7 +2,12 @@ package jp.kshoji.driver.adkmidi.util;
 
 import java.io.ByteArrayOutputStream;
 
-
+/**
+ * Parses Legacy MIDI events
+ * 
+ * @author K.Shoji
+ *
+ */
 public class MidiParser {
 	private int midiState = MIDI_STATE_WAIT;
 	private int midiEventKind = 0;
@@ -29,22 +34,58 @@ public class MidiParser {
 		int midiEvent = event & 0xff;
 		if (midiState == MIDI_STATE_WAIT) {
 			switch (midiEvent & 0xf0) {
-			case 0xf0:
-				if (midiEvent == 0xf0) {
-					systemExclusiveStream = new ByteArrayOutputStream();
-					systemExclusiveStream.write(midiEvent);
-					midiState = MIDI_STATE_SIGNAL_SYSEX;
+			case 0xf0: {
+				switch (midiEvent) {
+				case 0xf0:
+					synchronized (this) {
+						if (systemExclusiveStream == null) {
+							systemExclusiveStream = new ByteArrayOutputStream();
+						}
+					}
+
+					synchronized (systemExclusiveStream) {
+						systemExclusiveStream.write(midiEvent);
+						midiState = MIDI_STATE_SIGNAL_SYSEX;
+					}
+					break;
+
+				case 0xf1:
+				case 0xf3:
+					// 0xf1 MIDI Time Code Quarter Frame. : 2bytes
+					// 0xf3 Song Select. : 2bytes
+					midiEventKind = midiEvent;
+					midiState = MIDI_STATE_SIGNAL_2BYTES_2;
+					break;
+
+				case 0xf2:
+					// 0xf2 Song Position Pointer. : 3bytes
+					midiEventKind = midiEvent;
+					midiState = MIDI_STATE_SIGNAL_3BYTES_2;
+					break;
+
+				case 0xf6:
+				case 0xf8:
+				case 0xfa:
+				case 0xfb:
+				case 0xfc:
+				case 0xfe:
+				case 0xff:
+					// 0xf6 Tune Request : 1byte
+					// 0xf8 Timing Clock : 1byte
+					// 0xfa Start : 1byte
+					// 0xfb Continue : 1byte
+					// 0xfc Stop : 1byte
+					// 0xfe Active Sensing : 1byte
+					// 0xff Reset : 1byte
+					// handle event
+					midiMsg = new MidiMessage(midiEvent, 0, 0);
+					midiState = MIDI_STATE_WAIT;
+					break;
+					
+				default:
+						break;
 				}
-				// TODO 0xf1 MIDI Time Code Quarter Frame. : 2bytes
-				// TODO 0xf2 Song Position Pointer. : 3bytes
-				// TODO 0xf3 Song Select. : 2bytes
-				// TODO 0xf6 Tune Request : 1byte
-				// TODO 0xf8 Timing Clock : 1byte
-				// TODO 0xfa Start : 1byte
-				// TODO 0xfb Continue : 1byte
-				// TODO 0xfc Stop : 1byte
-				// TODO 0xfe Active Sensing : 1byte
-				// TODO 0xff Reset : 1byte
+			}
 				break;
 			case 0x80:
 			case 0x90:
@@ -74,6 +115,7 @@ public class MidiParser {
 			switch (midiEventKind & 0xf0) {
 			case 0xc0: // program change
 			case 0xd0: // channel after-touch
+			case 0xf0:
 				// 2bytes pattern
 				midiEventNote = midiEvent;
 				// handle event
@@ -92,6 +134,7 @@ public class MidiParser {
 			case 0xa0:
 			case 0xb0:
 			case 0xe0:
+			case 0xf0:
 				// 3bytes pattern
 				midiEventNote = midiEvent;
 				midiState = MIDI_STATE_SIGNAL_3BYTES_3;
@@ -108,6 +151,7 @@ public class MidiParser {
 			case 0xa0: // control polyphonic key pressure
 			case 0xb0: // control change
 			case 0xe0: // pitch bend
+			case 0xf0: // Song Position Pointer.
 				// 3bytes pattern
 				midiEventVelocity = midiEvent;
 				// handle Event
@@ -122,14 +166,18 @@ public class MidiParser {
 		} else if (midiState == MIDI_STATE_SIGNAL_SYSEX) {
 			if (midiEvent == 0xf7) {
 				if (systemExclusiveStream != null) {
-					systemExclusiveStream.write(midiEvent);
-					// handle event
-					midiMsg = new MidiMessage(midiEventKind, systemExclusiveStream.toByteArray());
+					synchronized (systemExclusiveStream) {
+						systemExclusiveStream.write(midiEvent);
+						// handle event
+						midiMsg = new MidiMessage(midiEventKind, systemExclusiveStream.toByteArray());
+					}
 				}
 				midiState = MIDI_STATE_WAIT;
 			} else {
 				if (systemExclusiveStream != null) {
-					systemExclusiveStream.write(midiEvent);
+					synchronized (systemExclusiveStream) {
+						systemExclusiveStream.write(midiEvent);
+					}
 				} else {
 					midiState = MIDI_STATE_WAIT;
 				}

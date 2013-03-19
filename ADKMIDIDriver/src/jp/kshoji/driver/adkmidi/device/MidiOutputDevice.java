@@ -24,9 +24,7 @@ public class MidiOutputDevice implements OnMidiEventListener {
 	@Override
 	public void onMidiSystemExclusive(byte[] systemExclusive) {
 		try {
-			outputStream.write(0xf0);
 			outputStream.write(systemExclusive);
-			outputStream.write(0xf7);
 		} catch (IOException e) {
 			Log.d(Constants.TAG, "IOException", e);
 		}
@@ -101,7 +99,7 @@ public class MidiOutputDevice implements OnMidiEventListener {
 		try {
 			outputStream.write(0xe0 | (channel & 0xf));
 			outputStream.write(amount & 0xff);
-			outputStream.write((amount >> 8) & 0xff);
+			outputStream.write((amount >> 7) & 0xff);
 		} catch (IOException e) {
 			Log.d(Constants.TAG, "IOException", e);
 		}

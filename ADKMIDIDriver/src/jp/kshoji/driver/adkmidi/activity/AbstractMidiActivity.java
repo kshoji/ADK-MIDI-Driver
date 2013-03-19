@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2011 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package jp.kshoji.driver.adkmidi.activity;
 
 import java.io.FileDescriptor;
@@ -21,26 +5,30 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
+import jp.kshoji.driver.adkmidi.device.MidiInputDevice;
 import jp.kshoji.driver.adkmidi.device.MidiOutputDevice;
 import jp.kshoji.driver.adkmidi.listener.OnMidiEventListener;
+import jp.kshoji.driver.adkmidi.thread.AccessoryListeningThread;
 import jp.kshoji.driver.adkmidi.util.Constants;
-import jp.kshoji.driver.adkmidi.util.MidiMessage;
-import jp.kshoji.driver.adkmidi.util.MidiParser;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import com.android.future.usb.UsbAccessory;
-import com.android.future.usb.UsbManager;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
-public abstract class AbstractMidiActivity extends Activity implements Runnable, OnMidiEventListener {
+import com.android.future.usb.UsbAccessory;
+import com.android.future.usb.UsbManager;
+
+/**
+ * base Activity for using ADK and MIDI Shield
+ * 
+ * @author K.Shoji
+ */
+public abstract class AbstractMidiActivity extends Activity implements OnMidiEventListener {
 	private static final String ACTION_USB_PERMISSION = "jp.kshoji.driver.adkmidi.action.USB_PERMISSION";
 
 	private UsbManager usbManager;
@@ -48,13 +36,14 @@ public abstract class AbstractMidiActivity extends Activity implements Runnable,
 	boolean permissionRequestPending;
 
 	UsbAccessory usbAccessory;
+	AccessoryListeningThread accessoryListeningThread;
 	ParcelFileDescriptor accessoryDescriptor;
 	FileInputStream inputStream;
 	FileOutputStream outputStream;
 
 	private final BroadcastReceiver usbBroadcastReceiver = new BroadcastReceiver() {
 		@Override
-		public void onReceive(@SuppressWarnings("unused") Context context, Intent intent) {
+		public void onReceive(Context context, Intent intent) {
 			String action = intent.getAction();
 			if (ACTION_USB_PERMISSION.equals(action)) {
 				synchronized (this) {
@@ -75,7 +64,10 @@ public abstract class AbstractMidiActivity extends Activity implements Runnable,
 		}
 	};
 
-	/** Called when the activity is first created. */
+	/*
+	 * (non-Javadoc)
+	 * @see android.app.Activity#onCreate(android.os.Bundle)
+	 */
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -94,6 +86,10 @@ public abstract class AbstractMidiActivity extends Activity implements Runnable,
 		midiOutputDevice = null;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * @see android.app.Activity#onRetainNonConfigurationInstance()
+	 */
 	@Override
 	public Object onRetainNonConfigurationInstance() {
 		if (usbAccessory != null) {
@@ -102,6 +98,10 @@ public abstract class AbstractMidiActivity extends Activity implements Runnable,
 		return super.onRetainNonConfigurationInstance();
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * @see android.app.Activity#onResume()
+	 */
 	@Override
 	public void onResume() {
 		if (inputStream != null && outputStream != null) {
@@ -133,19 +133,32 @@ public abstract class AbstractMidiActivity extends Activity implements Runnable,
 		super.onResume();
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * @see android.app.Activity#onPause()
+	 */
 	@Override
 	public void onPause() {
 		closeAccessory();
 		super.onPause();
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * @see android.app.Activity#onDestroy()
+	 */
 	@Override
 	protected void onDestroy() {
 		unregisterReceiver(usbBroadcastReceiver);
 		super.onDestroy();
 	}
 
-	void openAccessory(UsbAccessory accessory) {
+	/**
+	 * Opens the UsbAccesory
+	 * 
+	 * @param accessory
+	 */
+	private void openAccessory(UsbAccessory accessory) {
 		accessoryDescriptor = usbManager.openAccessory(accessory);
 		if (accessoryDescriptor != null) {
 			usbAccessory = accessory;
@@ -154,8 +167,11 @@ public abstract class AbstractMidiActivity extends Activity implements Runnable,
 			inputStream = new FileInputStream(descriptor);
 			outputStream = new FileOutputStream(descriptor);
 
-			Thread thread = new Thread(this);
-			thread.start();
+			if (accessoryListeningThread != null) {
+				accessoryListeningThread.stopThread();
+			}
+			accessoryListeningThread = new AccessoryListeningThread(inputStream, new MidiInputDevice(this));
+			accessoryListeningThread.start();
 			midiOutputDevice = new MidiOutputDevice(outputStream);
 			
 			onDeviceAttached();
@@ -166,7 +182,10 @@ public abstract class AbstractMidiActivity extends Activity implements Runnable,
 		}
 	}
 
-	void closeAccessory() {
+	/**
+	 * Closes the UsbAccesory
+	 */
+	private void closeAccessory() {
 		midiOutputDevice = null;
 
 		try {
@@ -183,81 +202,20 @@ public abstract class AbstractMidiActivity extends Activity implements Runnable,
 		onDeviceDetached();
 	}
 
+	/**
+	 * Will be called when accessory is attached.
+	 */
 	protected void onDeviceAttached() {
 		// do nothing. must be override
 	}
-	
+
+	/**
+	 * Will be called when accessory is removed.
+	 */
 	protected void onDeviceDetached() {
 		// do nothing. must be override
 	}
 	
-	private MidiParser midiParser = new MidiParser();
-
-	@Override
-	public void run() {
-		int readLength = 0;
-		byte[] buffer = new byte[16384];
-		int i;
-
-		while (readLength >= 0) {
-			try {
-				readLength = inputStream.read(buffer);
-			} catch (IOException e) {
-				break;
-			}
-
-			// MIDI signal received
-			for (i = 0; i < readLength; i++) {
-				MidiMessage midiEvent = midiParser.parseMidiEvent(buffer[i]);
-				if (midiEvent != null) {
-					Message message = Message.obtain(handler);
-					message.obj = midiEvent;
-					handler.sendMessage(message);
-				}
-			}
-		}
-	}
-
-	Handler handler = new Handler() {
-		@Override
-		public void handleMessage(Message msg) {
-			MidiMessage o = (MidiMessage) msg.obj;
-			handleMidiMessage(o);
-		}
-	};
-
-	protected void handleMidiMessage(MidiMessage o) {
-		switch (o.getByte1() & 0xf0) {
-		case 0x80: // note off
-			onMidiNoteOff(o.getByte1() & 0xf, o.getByte2(), o.getByte3());
-			break;
-		case 0x90: // note on
-			onMidiNoteOn(o.getByte1() & 0xf, o.getByte2(), o.getByte3());
-			break;
-		case 0xa0: // control polyphonic key pressure
-			onMidiPolyphonicAftertouch(o.getByte1() & 0xf, o.getByte2(), o.getByte3());
-			break;
-		case 0xb0: // control change
-			onMidiControlChange(o.getByte1() & 0xf, o.getByte2(), o.getByte3());
-			break;
-		case 0xc0: // program change:2bytes
-			onMidiProgramChange(o.getByte1() & 0xf, o.getByte2());
-			break;
-		case 0xd0: // channel after-touch:2bytes
-			onMidiChannelAftertouch(o.getByte1() & 0xf, o.getByte2());
-			break;
-		case 0xe0: // pitch bend
-			onMidiPitchWheel(o.getByte1() & 0xf, o.getByte2() | (o.getByte3() << 8));
-			break;
-		case 0xf0: // sysex
-			onMidiSystemExclusive(o.getSystemExclusive());
-			break;
-		default:
-			// illegal state
-			break;
-		}
-	}
-
 	private MidiOutputDevice midiOutputDevice;
 
 	/**
